@@ -1,11 +1,18 @@
-// memo : depeche pfitzer
+#include "utils.h"
+
+# define BUF_RECV_SIZE 64
+
 # define SEC * 1000
-// # define MS * 1
+# define MIN * 60 SEC
+
+// Pin for manually adjusting period and pulse width simulation
 # define pot_period 0
 # define pot_pulse_width 1
+# define cas_signal 2
 
 bool verbose = false;
-bool tick = false;
+bool log_tick = false;
+bool log_cas = false;
 // TODO : Add trim. Get rid of String's
 // void toLowerCase(char *str) {
 //   int i = 0;
@@ -17,6 +24,7 @@ bool tick = false;
 unsigned int    pulse_width = 512;
 unsigned int    period = 1 SEC;
 int             pulse_offset = 0;
+unsigned int    cas_val = 0;
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
@@ -33,8 +41,12 @@ void led_tick() {
   const int elapsed = (ms_current - ms_last) % period;
   if (ms_current - ms_last >= period) {
     ms_last = ms_current - elapsed;
-    if (verbose || tick)
+    if (verbose || log_tick)
       Serial.println("Tick.");
+    // if (verbose || log_cas) {
+    //   Serial.print("CAS Signal:");
+    //   Serial.println(cas_val);
+    // }
   }
   // TODO: Convert potential neg values to positive ?
   // Compute position of pulse
@@ -54,11 +66,11 @@ void led_tick() {
   // Default to low, set HIGH if needed
   int output = LOW;
   // For verbose output
-  char *shp; // Shape, for lack of better name
-  char *nxt; // Next, high or low
-  shp = "N/A"; // will set when calculating shit
-  // Default to low, set to high if needed
-  nxt = "LOW";
+  char *shp = (char *)"N/A"; // Shape, for lack of better name
+  char *nxt = (char *)"LOW"; // Next, high or low
+  // shp = "N/A"; // will set when calculating shit
+  // // Default to low, set to high if needed
+  // nxt = "LOW";
 
   // Pulse overlaps with period
   // ex: TPPPTPPPTPPPT
@@ -66,31 +78,31 @@ void led_tick() {
     // Serial.println("DAFUQ AM I DOING HERE");
     output = HIGH;
     if (verbose) {
-      shp = "MAX";
-      nxt = "HIGH";
+      shp = (char *)"MAX";
+      nxt = (char *)"HIGH";
     }
   }
   // Pulse width included in period
   // ex: T.P.T.P.T.P.T
   else if (pulse_end >= pulse_start) {
     if (verbose)
-      shp = "INC";
+      shp = (char *)"INC";
     // We're in da pulse
     if (elapsed >= pulse_start && elapsed <= pulse_end) {
       output = HIGH;
       if (verbose)
-        nxt = "HIGH";
+        nxt = (char *)"HIGH";
     }
   }
   // Split / pulse overlaps period change
   // ex: T..PTP.PTP.PT
   else if (pulse_start >= pulse_end) {
     if (verbose)
-      shp = "GAP";
+      shp = (char *)"GAP";
     if (elapsed >= pulse_start || elapsed <= pulse_end) {
       output = HIGH;
       if (verbose)
-        nxt = "HIGH";
+        nxt = (char *)"HIGH";
     }
   }
 
@@ -113,7 +125,7 @@ void led_tick() {
   }
 }
 
-void updateAnalog(int pin, int *var, int *last) {
+void updateAnalog(unsigned int pin, unsigned int *var, unsigned int *last) {
     // Last is to avoid pot overriding digitally set values
     if (last == NULL) { last = var; }
     int pot_read = analogRead(pin);
@@ -151,38 +163,32 @@ void print_param(int var, char *name) {
 
 void print_params() {
   Serial.write('\n');
-  print_param(period, "Period");
-  print_param(pulse_width, "Pulse width");
-  print_param(pulse_offset, "Pulse Offset");
+  print_param(period, (char *)"Period");
+  print_param(pulse_width, (char *)"Pulse width");
+  print_param(pulse_offset, (char *)"Pulse Offset");
   Serial.write('\n');
 }
 
 // TODO: Cleanup this shit
-bool eval(String input) {
-  char buffer[64]; // fuck my life
-  input.getBytes(buffer, 64);
+bool eval(char *input) {
+  const char  separators[] = " :=";
+  int         maxTokens = 2;
+  char        *tokens[maxTokens];
+  char        *cmd;
+  int         arg;
 
-  const char separators[] = " :=";
-  int maxTokens = 2;
-  String tokens[maxTokens]; // current max tokens = 2
-
-  tokens[0] = strtok(buffer, separators);
-  if (tokens[0] == NULL) {
-    Serial.println("Invalid command (no words)");
-    return false;
-  }
-  tokens[0] = String(tokens[0]);
-  tokens[0].trim();
-  tokens[0].toLowerCase();
-
-  int token = 1;
+  int token = 0;
   while (token < maxTokens) {
-    tokens[token] = strtok(NULL, separators);
+    tokens[token]
+      = strtok(token ? NULL : input, separators);
+
     if (tokens[token] == NULL) { break; }
     else {
-      tokens[token] = String(tokens[token]);
-      tokens[token].trim();
-      tokens[token].toLowerCase();
+      strtrim(tokens[token]);
+      // Serial.print("Strtrim result: -");
+      // Serial.print(tokens[token]);
+      // Serial.println("-");
+      // tokens[token].toLowerCase();
       token++;
     }
   }
@@ -193,65 +199,100 @@ bool eval(String input) {
 
   switch (token) {
     case 1:
+      cmd = tokens[0];
       // Just one token, test for single word commands
-      if (tokens[0] == "params") {
+      if (streq(cmd, "params")) {
         print_params();
       }
-      else if (tokens[0] == "verbose") {
+      else if (streq(cmd, "verbose")) {
         verbose = !verbose;
       }
-      else if (tokens[0] == "ticker" || tokens[0] == "tick") {
-        tick = !tick;
+      else if (streq(cmd, "ticker") || streq(cmd, "tick")) {
+        log_tick = !log_tick;
       }
-      else if (tokens[0] == "period" || tokens[0] == "t") {
-        print_param(period, "Period");
+      else if (streq(cmd, "log_cas") || streq(cmd, "cas")) {
+        log_cas = !log_cas;
       }
-      else if (tokens[0] == "pulse_width" || tokens[0] == "width" || tokens[0] == "pulse") {
-        print_param(pulse_width, "Pulse Width");
+      else if (streq(cmd, "period") || streq(cmd, "t")) {
+        print_param(period, (char *)"Period");
       }
-      else if (tokens[0] == "pulse_offset" || tokens[0] == "offset") {
-        print_param(pulse_offset, "Pulse Offset");
+      else if (streq(cmd, "pulse_width") || streq(cmd, "width") || streq(cmd, "pulse")) {
+        print_param(pulse_width, (char *)"Pulse Width");
+      }
+      else if (streq(cmd, "pulse_offset") || streq(cmd, "offset")) {
+        print_param(pulse_offset, (char *)"Pulse Offset");
+      } else {
+        return false;
       }
       return true;
       break;
     case 2:
-      if (tokens[0] == "period" || tokens[0] == "t") {
-        period = abs(tokens[1].toInt());
-        print_param(period, "Period");
+      cmd = tokens[0];
+      arg = atoi(tokens[1]);
+
+      if (streq(cmd, "period") || streq(cmd, "t")) {
+        period = abs(arg);
+        print_param(period, (char *)"Period");
       }
-    else if (tokens[0] == "pulse_width" || tokens[0] == "width" || tokens[0] == "pulse") {
-      pulse_width = abs(tokens[1].toInt());
-      print_param(pulse_width, "Pulse Width");
-    }
-    else if (tokens[0] == "pulse_offset" || tokens[0] == "offset") {
-      pulse_offset = tokens[1].toInt();
-      print_param(pulse_offset, "Pulse Offset");
-    }
-    return true;
-    // break;
-  default:
-    return false;
-    // break;
+      else if (streq(cmd, "pulse_width")
+        || streq(cmd, "width")
+        || streq(cmd, "pulse")) {
+        pulse_width = abs(arg);
+        print_param(pulse_width, (char *)"Pulse Width");
+      }
+      else if (streq(cmd, "pulse_offset")
+        || streq(cmd, "offset")) {
+        pulse_offset = arg;
+        print_param(pulse_offset, (char *)"Pulse Offset");
+      } else {
+        return false;
+      }
+      return true;
+      break;
+    default:
+      return false;
   }
   return false;
 }
 
-int last_pot_period;
-int last_pot_pulse;
+unsigned int last_pot_period;
+unsigned int last_pot_pulse;
+unsigned int last_cas_val;
 int lastLoop = 0;
 void loop() {
+  int lastCas = last_cas_val;
+  updateAnalog(cas_signal, &cas_val, &last_cas_val);
+  if (log_cas && lastCas != last_cas_val) {
+    Serial.write("CAS : ");
+    Serial.println(cas_val);
+  }
   // if (verbose || tick) {
   //   int time = millis();
   //   Serial.println(time - lastLoop);
   //   lastLoop = time;
   // }
   led_tick();
+
   updateAnalog(pot_period, &period, &last_pot_period);
   updateAnalog(pot_pulse_width, &pulse_width, &last_pot_pulse);
+  updateAnalog(cas_signal, &cas_val, &cas_val);
+
   if (Serial.available() > 0) {
-    String input = Serial.readString();
-    input.trim();
-    input.toLowerCase();
+    // TODO : Rotary buffer to reduce static alloc cycles
+    char                  input[BUF_RECV_SIZE];
+    size_t                read_bytes = Serial.readBytes(input, BUF_RECV_SIZE);
+
+    input[read_bytes] = '\0';
+
+    Serial.write("> ");
+    Serial.println(input);
+    size_t i = 0;
+    while (input[i]) {
+      input[i] = tolower(input[i]);
+      i++;
+    }
+
+    strtrim(input);
     if (!eval(input)) {
       Serial.println("Unrecognized input.");
     }
