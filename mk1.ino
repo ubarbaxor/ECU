@@ -1,38 +1,41 @@
 #include "utils.h"
+#include "cas.h"
 
 # define BUF_RECV_SIZE 64
-
-# define SEC * 1000
-# define MIN * 60 SEC
 
 // Pin for manually adjusting period and pulse width simulation
 # define pot_period 0
 # define pot_pulse_width 1
-# define cas_signal 2
+
+# define cas_pin 2
 
 bool verbose = false;
 bool log_tick = false;
-bool log_cas = false;
-// TODO : Add trim. Get rid of String's
-// void toLowerCase(char *str) {
-//   int i = 0;
-//   while (str[i]) {
-//     str[i] = tolower(str[i]);
-//   }
-// }
+bool log_cas = true;
+
+int             ledState = LOW;
+unsigned long   ms_last = 0;
 
 unsigned int    pulse_width = 512;
 unsigned int    period = 1 SEC;
 int             pulse_offset = 0;
-unsigned int    cas_val = 0;
+int             cas_error = 512;
+int             cas_val = 0;
+unsigned int    cas_BL = 0;
+unsigned int    cas_OR = 0;
+
+cas_state       current_cas;
 
 void setup() {
+  unsigned long   ms_current = millis();
   pinMode(LED_BUILTIN, OUTPUT);
   Serial.begin(9600);
-}
+  Serial.println("Init.");
 
-int             ledState = LOW;
-unsigned long   ms_last = 0;
+  cas_error = cas_calibration(cas_pin, log_cas);
+  Serial.write("\nCAS Calibrated : ");
+  Serial.println(cas_error);
+}
 
 void led_tick() {
   // total elapsed time
@@ -41,12 +44,8 @@ void led_tick() {
   const int elapsed = (ms_current - ms_last) % period;
   if (ms_current - ms_last >= period) {
     ms_last = ms_current - elapsed;
-    if (verbose || log_tick)
+    if (log_tick)
       Serial.println("Tick.");
-    // if (verbose || log_cas) {
-    //   Serial.print("CAS Signal:");
-    //   Serial.println(cas_val);
-    // }
   }
   // TODO: Convert potential neg values to positive ?
   // Compute position of pulse
@@ -108,7 +107,8 @@ void led_tick() {
 
   if (ledState != output) {
     ledState = output;
-    digitalWrite(LED_BUILTIN, ledState);
+    // digitalWrite(LED_BUILTIN, ledState);
+    digitalWrite(LED_BUILTIN, HIGH);
   
     if (verbose) {
       Serial.print(shp);
@@ -162,7 +162,7 @@ void print_param(int var, char *name) {
 }
 
 void print_params() {
-  Serial.write('\n');
+  Serial.println();
   print_param(period, (char *)"Period");
   print_param(pulse_width, (char *)"Pulse width");
   print_param(pulse_offset, (char *)"Pulse Offset");
@@ -206,6 +206,8 @@ bool eval(char *input) {
       }
       else if (streq(cmd, "verbose")) {
         verbose = !verbose;
+        log_tick = verbose;
+        log_cas = verbose;
       }
       else if (streq(cmd, "ticker") || streq(cmd, "tick")) {
         log_tick = !log_tick;
@@ -257,16 +259,22 @@ bool eval(char *input) {
 
 unsigned int last_pot_period;
 unsigned int last_pot_pulse;
-unsigned int last_cas_val;
-int lastLoop = 0;
+
+// int lastLoop = 0;
+cas_state    last_state;
 void loop() {
-  int lastCas = last_cas_val;
-  updateAnalog(cas_signal, &cas_val, &last_cas_val);
-  if (log_cas && lastCas != last_cas_val) {
+  int lastCas = cas_val;
+  cas_state new_cas_state = cas_tick(last_state, analogRead(cas_pin) - cas_error);
+
+  cas_val = new_cas_state.sample;
+  if (log_cas && lastCas != cas_val) {
     Serial.write("CAS : ");
     Serial.println(cas_val);
+    print_cas_state(new_cas_state);
+    // Serial.write("1 : ");
+    // Serial.println(1);
   }
-  // if (verbose || tick) {
+  // if (tick) {
   //   int time = millis();
   //   Serial.println(time - lastLoop);
   //   lastLoop = time;
@@ -275,10 +283,9 @@ void loop() {
 
   updateAnalog(pot_period, &period, &last_pot_period);
   updateAnalog(pot_pulse_width, &pulse_width, &last_pot_pulse);
-  updateAnalog(cas_signal, &cas_val, &cas_val);
 
   if (Serial.available() > 0) {
-    // TODO : Rotary buffer to reduce static alloc cycles
+    // TODO : static buffer to reduce local alloc cycles ?
     char                  input[BUF_RECV_SIZE];
     size_t                read_bytes = Serial.readBytes(input, BUF_RECV_SIZE);
 
@@ -294,7 +301,7 @@ void loop() {
 
     strtrim(input);
     if (!eval(input)) {
-      Serial.println("Unrecognized input.");
+      Serial.println("Unrecognized input. Try \"help\"");
     }
   }
 }
