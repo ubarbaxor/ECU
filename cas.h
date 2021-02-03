@@ -1,22 +1,35 @@
 #ifndef __CAS_STATES__
 # define __CAS_STATES__
 
-# ifndef RISING
-#  define RISING 1
+# ifndef CHANGE
+#  define CHANGE 1
 # endif
 
 # ifndef FALLING
-#  define FALLING -1
+#  define FALLING 2
 # endif
 
-# ifndef STABLE
-#  define STABLE 0
+# ifndef RISING
+#  define RISING 3
+# endif
+
+# ifndef CAS_MARGIN
+#  define CAS_MARGIN 1
+# endif
+
+// Pardon, c'est sale.
+# ifndef SHAPE_NAME
+#  define SHAPE_NAME(shp) \
+  shp == RISING ? "RISING" \
+  : shp == FALLING ? "FALLING" \
+  : shp == CHANGE ? "CHANGE" \
+  : "UNKNOWN"
 # endif
 
 typedef struct s_cas_state {
-  int shape = STABLE;
-  int sample = 0;
-  int tick[3] = {0,0,0};
+  int             shape = CHANGE;
+  int             sample = 0;
+  unsigned long   tick[3] = {0,0,0};
 } cas_state;
 
 cas_state cas_tick(cas_state last, int cas_sample);

@@ -20,11 +20,12 @@ unsigned int    pulse_width = 512;
 unsigned int    period = 1 SEC;
 int             pulse_offset = 0;
 int             cas_error = 512;
-int             cas_val = 0;
+// int             cas_val = 0;
 unsigned int    cas_BL = 0;
 unsigned int    cas_OR = 0;
 
-cas_state       current_cas;
+cas_state       last_state;
+// cas_state       current_cas;
 
 void setup() {
   unsigned long   ms_current = millis();
@@ -166,6 +167,8 @@ void print_params() {
   print_param(period, (char *)"Period");
   print_param(pulse_width, (char *)"Pulse width");
   print_param(pulse_offset, (char *)"Pulse Offset");
+  print_param(log_cas, (char *)"Log CAS");
+  print_cas_state(last_state);
   Serial.write('\n');
 }
 
@@ -261,15 +264,14 @@ unsigned int last_pot_period;
 unsigned int last_pot_pulse;
 
 // int lastLoop = 0;
-cas_state    last_state;
 void loop() {
-  int lastCas = cas_val;
+  // int lastCas = cas_val;
   cas_state new_cas_state = cas_tick(last_state, analogRead(cas_pin) - cas_error);
 
-  cas_val = new_cas_state.sample;
-  if (log_cas && lastCas != cas_val) {
+  // cas_val = new_cas_state.sample;
+  if (log_cas && new_cas_state.sample != last_state.sample) {
     Serial.write("CAS : ");
-    Serial.println(cas_val);
+    // Serial.println(cas_val);
     print_cas_state(new_cas_state);
     // Serial.write("1 : ");
     // Serial.println(1);
