@@ -4,19 +4,21 @@
 # define BUF_RECV_SIZE 64
 
 // Pin for manually adjusting period and pulse width simulation
-# define pot_period 0
-# define pot_pulse_width 1
+# define pot_pulse_width 0
+# define pot_period 1
 
 # define cas_pin 2
 
+# define spark_pin 7
+
 bool verbose = false;
-bool log_tick = false;
+bool tick = false;
 bool log_cas = true;
 
-int             ledState = LOW;
+int             tickState = LOW;
 unsigned long   ms_last = 0;
 
-unsigned int    pulse_width = 512;
+unsigned int    pulse_width = 1;
 unsigned int    period = 1 SEC;
 int             pulse_offset = 0;
 int             cas_error = 512;
@@ -30,6 +32,7 @@ cas_state       last_state;
 void setup() {
   unsigned long   ms_current = millis();
   pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(spark_pin, OUTPUT);
   Serial.begin(9600);
   Serial.println("Init.");
 
@@ -45,8 +48,8 @@ void led_tick() {
   const int elapsed = (ms_current - ms_last) % period;
   if (ms_current - ms_last >= period) {
     ms_last = ms_current - elapsed;
-    if (log_tick)
-      Serial.println("Tick.");
+    // if (tick)
+    //   Serial.println("Tick.");
   }
   // TODO: Convert potential neg values to positive ?
   // Compute position of pulse
@@ -106,10 +109,10 @@ void led_tick() {
     }
   }
 
-  if (ledState != output) {
-    ledState = output;
-    // digitalWrite(LED_BUILTIN, ledState);
-    digitalWrite(LED_BUILTIN, HIGH);
+  if (tickState != output) {
+    digitalWrite(LED_BUILTIN, output);
+    digitalWrite(spark_pin, output);
+    tickState = output;
   
     if (verbose) {
       Serial.print(shp);
@@ -167,6 +170,7 @@ void print_params() {
   print_param(period, (char *)"Period");
   print_param(pulse_width, (char *)"Pulse width");
   print_param(pulse_offset, (char *)"Pulse Offset");
+  print_param(tick, (char *)"Tick");
   print_param(log_cas, (char *)"Log CAS");
   print_cas_state(last_state);
   Serial.write('\n');
@@ -209,11 +213,11 @@ bool eval(char *input) {
       }
       else if (streq(cmd, "verbose")) {
         verbose = !verbose;
-        log_tick = verbose;
+        tick = verbose;
         log_cas = verbose;
       }
       else if (streq(cmd, "ticker") || streq(cmd, "tick")) {
-        log_tick = !log_tick;
+        tick = !tick;
       }
       else if (streq(cmd, "log_cas") || streq(cmd, "cas")) {
         log_cas = !log_cas;
@@ -270,21 +274,16 @@ void loop() {
 
   // cas_val = new_cas_state.sample;
   if (log_cas && new_cas_state.sample != last_state.sample) {
-    Serial.write("CAS : ");
-    // Serial.println(cas_val);
+    // Serial.write("CAS : ");
     print_cas_state(new_cas_state);
-    // Serial.write("1 : ");
-    // Serial.println(1);
   }
-  // if (tick) {
-  //   int time = millis();
-  //   Serial.println(time - lastLoop);
-  //   lastLoop = time;
-  // }
-  led_tick();
 
-  updateAnalog(pot_period, &period, &last_pot_period);
-  updateAnalog(pot_pulse_width, &pulse_width, &last_pot_pulse);
+  if (tick) {
+    led_tick();
+  }
+
+  // updateAnalog(pot_period, &period, &last_pot_period);
+  // updateAnalog(pot_pulse_width, &pulse_width, &last_pot_pulse);
 
   if (Serial.available() > 0) {
     // TODO : static buffer to reduce local alloc cycles ?

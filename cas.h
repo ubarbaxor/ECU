@@ -20,10 +20,10 @@
 // Pardon, c'est sale.
 # ifndef SHAPE_NAME
 #  define SHAPE_NAME(shp) \
-  shp == RISING ? "RISING" \
-  : shp == FALLING ? "FALLING" \
-  : shp == CHANGE ? "CHANGE" \
-  : "UNKNOWN"
+  shp == RISING ? "\"RISING\"" \
+  : shp == FALLING ? "\"FALLING\"" \
+  : shp == CHANGE ? "\"CHANGE\"" \
+  : "\"UNKNOWN\""
 # endif
 
 typedef struct s_cas_state {

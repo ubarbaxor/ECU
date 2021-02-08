@@ -48,17 +48,16 @@ cas_state cas_tick(cas_state state, int sample) {
 
   // Near-zero -> zero
   if (sample >= -CAS_MARGIN && sample <= CAS_MARGIN) {
-    newstate.sample = 0;
-  } else {
-    newstate.sample = sample;
+    sample = 0;
   }
+  newstate.sample = sample;
 
   if (state.shape == FALLING && sample >= state.sample + CAS_MARGIN) {
     // Higher than falling = change
-    state.shape = CHANGE;
+    newstate.shape = CHANGE;
   } else if (state.shape == RISING && sample <= state.sample - CAS_MARGIN) {
     // Lower than rising = change
-    state.shape = CHANGE;
+    newstate.shape = CHANGE;
   } else {
     if (sample < state.sample - CAS_MARGIN) {
       // Lesser than before by at least MARGIN
@@ -84,18 +83,18 @@ cas_state cas_tick(cas_state state, int sample) {
 }
 
 void  print_cas_state(cas_state state) {
-  Serial.println("{");
-  Serial.write("\t\"shape\": ");
-    Serial.println(SHAPE_NAME(state.shape));
+  // Serial.println("{");
+  // Serial.write("\t\"shape\": ");
+  //   Serial.println(SHAPE_NAME(state.shape));
   Serial.write("\t\"sample\": ");
     Serial.println(state.sample);
-  Serial.write("\t\"ticks\": [ ");
-    Serial.print(state.tick[0]);
-      Serial.write(", ");
-    Serial.print(state.tick[1]);
-      Serial.write(", ");
-    Serial.print(state.tick[2]);
-      Serial.println(" ]");
-  Serial.println("}");
+  // Serial.write("\t\"ticks\": [ ");
+  //   Serial.print(state.tick[0]);
+  //     Serial.write(", ");
+  //   Serial.print(state.tick[1]);
+  //     Serial.write(", ");
+  //   Serial.print(state.tick[2]);
+  //     Serial.println(" ]");
+  // Serial.println("}");
 
 }
