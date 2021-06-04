@@ -15,6 +15,8 @@ bool verbose = false;
 bool tick = false;
 bool log_cas = true;
 
+// TODO: Read clock each cycle ?
+
 int             tickState = LOW;
 unsigned long   ms_last = 0;
 
